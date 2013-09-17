@@ -13,7 +13,7 @@ trait Functor[F[_]] {
   def distribute[A,B](fab: F[(A, B)]): (F[A], F[B]) =
     (map(fab)(_._1), map(fab)(_._2))
 
-  def cofactor[A,B](e: Either[F[A], F[B]]): F[Either[A, B]] = ???
+  def cofactor[A,B](e: Either[F[A], F[B]]): F[Either[A, B]] = if(e.isLeft) map(e.left.get)(a => Left(a)) else map(e.right.get)(b => Right(b))
 }
 
 object Functor {
@@ -30,7 +30,7 @@ trait Monad[M[_]] extends Functor[M] {
   def map2[A,B,C](ma: M[A], mb: M[B])(f: (A, B) => C): M[C] =
     flatMap(ma)(a => map(mb)(b => f(a, b)))
 
-  def sequence[A](lma: List[M[A]]): M[List[A]] = ???
+  def sequence[A](lma: List[M[A]]): M[List[A]] = lma.foldRight( (unit(List[A]()))) ((x,acc) => map2(x,acc) (_ :: _))
 
   def traverse[A,B](la: List[A])(f: A => M[B]): M[List[B]] = ???
 
@@ -74,8 +74,8 @@ object Monad {
 }
 
 case class Id[A](value: A) {
-  def map[B](f: A => B): Id[B] = ???
-  def flatMap[B](f: A => Id[B]): Id[B] = ???
+  def map[B](f: A => B): Id[B] = Id(f(value))
+  def flatMap[B](f: A => Id[B]): Id[B] = f(value)
 }
 
 object Reader {
