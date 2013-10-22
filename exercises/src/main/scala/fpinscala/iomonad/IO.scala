@@ -232,7 +232,13 @@ object IO2 {
 
                              */
 
-  def monad[F[_]]: Monad[({ type f[a] = IO[F,a]})#f] = ???
+  def monad[F[_]]= new  Monad[({ type f[a] = IO[F,a]})#f] {
+    def unit[A](a: => A) = Pure(a)
+    def flatMap[A,B](io: IO[F,A])(f: A => IO[F,B]) = io match {
+      case Pure(a) => f(a)
+      case Request(expr, recv) => Request(expr, (flatMap(_: IO[F,A])(f)) compose recv )
+    }
+  }
 
                             /* 
 
@@ -241,13 +247,21 @@ object IO2 {
   `ReadLine` (it can ignore `PrintLine` calls).
 
                              */
-  def console(lines: List[String]): Run[Console] = ???
+  def console(lines: List[String]): Run[Console] = new Run[Console] { 
+    def apply[A](c: Console[A]) = c match {
+      case ReadLine => (lines.headOption,  console(lines.tail))
+      case PrintLine(_) => ((), this) // Ignored! 
+    }
+  }
                             /* 
 
   Exercise 3: Implement `run` given a `Monad[F]`.
 
                              */
-  def run[F[_],A](F: Monad[F])(io: IO[F,A]): F[A] = ???
+  def run[F[_],A](F: Monad[F])(io: IO[F,A]): F[A] = io match {
+    case Pure(a) => F.unit(a)
+    case Request(expr, recv) => F.flatMap(expr)(x => run(F)(recv(x))) 
+  }
 
   
                             /* 
