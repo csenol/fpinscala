@@ -14,17 +14,17 @@ trait Future[+A] {
   evaluator.
                              */
 
-  def flatMap[B](f: A => Future[B]): Future[B] = ???
+  def flatMap[B](f: A => Future[B]): Future[B] = this match {
+    case  Now(a)  => f(a)
+    case  Async(onFinish)  => BindAsync(onFinish, f)
+    case  More(thunk) => BindMore(thunk, f)
+    case  BindMore(thunk, k) => More( () => BindMore(thunk, k andThen (_ flatMap f)))
+    case  BindAsync(onFinish,  k) => More(() => BindAsync(onFinish, k andThen (_ flatMap f)))
+  }
 
-  def map[B](f: A => B): Future[B] =  ???
+  def map[B](f: A => B): Future[B] =  flatMap(x => Future.unit(f(x)))
 
-  def listen(cb: A => Trampoline[Unit]): Unit = 
-    this.step match {
-      case Now(a) => cb(a) 
-      case Async(onFinish) => onFinish(cb)
-      case BindAsync(onFinish, g) => 
-        onFinish(x => Trampoline.delay(g(x)) map (_ listen cb))
-    }
+  def listen(cb: A => Trampoline[Unit]): Unit = ???
 
   @annotation.tailrec
   final def step: Future[A] = this match {

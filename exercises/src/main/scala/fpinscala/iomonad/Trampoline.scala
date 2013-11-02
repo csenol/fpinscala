@@ -19,11 +19,20 @@ object Trampoline extends Monad[Trampoline] {
 
                              */
 
-//  @annotation.tailrec
-  def run[A](t: Trampoline[A]): A = ???
+  @annotation.tailrec
+  def run[A](t: Trampoline[A]): A = t match {
+    case Done(a) => a
+    case More(force) => run(force())
+    case Bind(force, f) => run(flatMap(force())(f) )
+  }
 
-  def unit[A](a: => A) = ???
-  def flatMap[A,B](a: Trampoline[A])(f: A => Trampoline[B]): Trampoline[B] = ???
+  def unit[A](a: => A) = Done(a)
+  def flatMap[A,B](a: Trampoline[A])(f: A => Trampoline[B]): Trampoline[B] = a match {
+    case Done(x) => f(x)
+    case More(x) => Bind(x, f)
+    case Bind(x, ff) => More(() => flatMap(Bind(x, ff))(f)) //Not sure 
+
+  }
 
   def more[A](a: => Trampoline[A]): Trampoline[A] = 
     More(() => a)

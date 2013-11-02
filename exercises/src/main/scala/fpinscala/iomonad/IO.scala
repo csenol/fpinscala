@@ -325,12 +325,39 @@ object IO3 {
     implicit def toMonadic[F[_],A](a: IO[F,A]) = 
       monad[F].toMonadic(a)
 
-//    @annotation.tailrec
-    def run[F[_],A](R: Run[F])(io: IO[F,A]): A = ???
+    @annotation.tailrec
+    def run[F[_],A](R: Run[F])(io: IO[F,A]): A = io match {
+      case Pure(a) => a 
+      case Request(expr, receive) => {val (a,rfa) = R(expr); run(rfa)(receive(a))} 
+      case BindMore(force, f) => run(R)(force() flatMap f )
+      case BindRequest(expr, receive, f) => { val (a, rfa)= R(expr); run(rfa)(receive(a) flatMap f) }
+      case More(force) => run(R)(force())
     
-    def run[F[_],A](F: Monad[F])(io: IO[F,A]): F[A] = ???
+    }
+    
+    def run[F[_],A](F: Monad[F])(io: IO[F,A]): F[A] = io match {
+      case Pure(a) => F.unit(a) 
+      case Request(expr, receive) => F.flatMap(expr)(x => run(F)(receive(x)))
+      case BindMore(force, f) => F.flatMap(run(F)(force()))(x => run(F)(f(x)))
+      case BindRequest(expr, receive, f) => F.flatMap(expr)(x => run(F)(receive(x) flatMap f))
+      case More(force) =>  run(F)(force())
+    
+    }
 
-    def monad[F[_]]: Monad[({ type f[x] = IO[F,x]})#f] = ???
+    def monad[F[_]] = new Monad[({ type f[x] = IO[F,x]})#f] {
+      
+      def unit[A](a: => A) = Pure(a)
+      def flatMap[A,B](fa: IO[F,A])(f: A => IO[F,B]) =  fa match {
+	case Pure(a) => f(a) 
+	case Request(expr, receive) => BindRequest(expr, receive, f)
+	case BindMore(force, k) => More(() => BindMore(force, k andThen (_ flatMap f)))
+	case BindRequest(expr, receive, k) => More(() => BindRequest(expr, receive,  k andThen (_ flatMap f)))
+	case More(force) => BindMore(force,f)
+
+
+      }
+
+    }
      
     /* 
      * Convenience function for constructing `IO` actions, we pick
@@ -376,7 +403,13 @@ object IO3 {
    * Exercise 12: Implement `run`, translating from `F` to `G` 
    * as part of the interpretation.
    */
-  def run[F[_],G[_],A](T: Trans[F,G])(G: Monad[G])(io: IO[F,A]): G[A] = ???
+  def run[F[_],G[_],A](T: Trans[F,G])(G: Monad[G])(io: IO[F,A]): G[A] = io match {
+      case Pure(a) => G.unit(a) 
+      case Request(expr, receive) => G.flatMap(T(expr))(x => run(T)(G)(receive(x)))
+      case BindMore(force, f) => G.flatMap(run(T)(G)(force()))(x => run(T)(G)(f(x)))
+      case BindRequest(expr, receive, f) => G.flatMap(T(expr))(x => run(T)(G)(receive(x) flatMap f))
+      case More(force) =>  run(T)(G)(force())
+  }
 
   /* See `Future.scala` for Exercise 13. */
 }

@@ -31,7 +31,7 @@ object Trampoline extends Monad[Trampoline] {
     a match { 
       case Done(forced) => f(forced)
       case More(force) => Bind(force, f)
-      case Bind(force,g) => More(() => Bind(force, g andThen (_ flatMap f)))
+      case Bind(force,g) => More(() => Bind(force, g andThen (_ flatMap f))) // Niye more ???
     }
   def more[A](a: => Trampoline[A]): Trampoline[A] = 
     More(() => a)
